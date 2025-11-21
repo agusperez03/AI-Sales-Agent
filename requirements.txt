@@ -8,3 +8,5 @@ requests
 langchain
 langchain-google-genai
 pydantic
+twilio
+flask

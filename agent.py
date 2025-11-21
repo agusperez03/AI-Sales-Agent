@@ -62,18 +62,57 @@ def update_cart(cart_id: int, items: List[CartItemInput]):
     except Exception as e:
         return f"Error updating cart: {e}"
 
+def process_message(user_input: str, chat_history: List[tuple]) -> tuple[str, List[tuple]]:
+    """
+    Process a single message and return the response with updated history.
+    
+    Args:
+        user_input: The user's message
+        chat_history: Current conversation history as list of (role, content) tuples
+    
+    Returns:
+        Tuple of (response_text, updated_chat_history)
+    """
+    api_key = os.getenv("GOOGLE_API_KEY")
+    if not api_key or api_key == "your_api_key_here":
+        return "Error: API key not configured.", chat_history
+
+    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", google_api_key=api_key, temperature=0)
+    tools = [list_products, get_product_details, create_cart, update_cart]
+    
+    agent_executor = create_react_agent(llm, tools)
+    
+    try:
+        # Invoke agent with full history
+        response = agent_executor.invoke({"messages": chat_history})
+        
+        # Update history with the new state (includes tool calls and AI response)
+        updated_history = response['messages']
+        
+        # Get the last message (AI response)
+        last_message = updated_history[-1]
+        content = last_message.content
+        
+        # Handle content if it's a list (Gemini specific)
+        if isinstance(content, list):
+            text_content = ""
+            for block in content:
+                if isinstance(block, dict) and block.get("type") == "text":
+                    text_content += block.get("text", "")
+            return text_content, updated_history
+        else:
+            return content, updated_history
+    except Exception as e:
+        return f"Error: {e}", chat_history
+
 def run_agent():
+    """Run the agent in interactive CLI mode."""
     api_key = os.getenv("GOOGLE_API_KEY")
     if not api_key or api_key == "your_api_key_here":
         print("Please set GOOGLE_API_KEY in .env file.")
         return
 
-    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", google_api_key=api_key, temperature=0)
-    tools = [list_products, get_product_details, create_cart, update_cart]
-    
     system_message = "You are a helpful sales assistant for Laburen.com. You can list products, show details, and manage shopping carts. Always verify product availability before adding to cart. When a user wants to buy, create a cart for them. If they want to change something, update the cart."
-
-    agent_executor = create_react_agent(llm, tools)
 
     # Initialize chat history with system message
     chat_history = [("system", system_message)]
@@ -87,28 +126,9 @@ def run_agent():
         # Add user message to history
         chat_history.append(("user", user_input))
         
-        try:
-            # Invoke agent with full history
-            response = agent_executor.invoke({"messages": chat_history})
-            
-            # Update history with the new state (includes tool calls and AI response)
-            chat_history = response['messages']
-            
-            # Get the last message (AI response)
-            last_message = chat_history[-1]
-            content = last_message.content
-            
-            # Handle content if it's a list (Gemini specific)
-            if isinstance(content, list):
-                text_content = ""
-                for block in content:
-                    if isinstance(block, dict) and block.get("type") == "text":
-                        text_content += block.get("text", "")
-                print(f"Agent: {text_content}")
-            else:
-                print(f"Agent: {content}")
-        except Exception as e:
-            print(f"Error: {e}")
+        # Process message using the new function
+        response_text, chat_history = process_message(user_input, chat_history)
+        print(f"Agent: {response_text}")
 
 if __name__ == "__main__":
     run_agent()
