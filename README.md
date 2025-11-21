@@ -1,5 +1,8 @@
 # Laburen Challenge - AI Sales Agent
 
+- **CODIGO Y DOCUMENTACIÓN ACTUALIZADO EN LA RAMA "TWILIO"**
+
+
 Este proyecto implementa un agente de IA capaz de vender productos mediante una API REST y una base de datos.
 
 ## Estructura
